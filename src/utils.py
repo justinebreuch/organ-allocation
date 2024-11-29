@@ -2,63 +2,25 @@ import os
 from typing import Callable, Dict, List, Tuple
 import pandas as pd
 from bs4 import BeautifulSoup
-from .model import Column
+from .model import Column, DonorType, FunctionalStatus, RecipientStatus, WaitlistRemovalReason
 import numpy as np
 
 
 DATES = [Column.ORGAN_RECOVERY_DATE.name, Column.WAITLIST_REGISTRATION_DATE.name,
          Column.TRANSPLANT_DATE.name, Column.END_DATE.name]
 
-"""
-VALUES
-"""
-DECEASED_VALUE = 'Deceased'
 """"
 DATE CLEANING
 """
-VARIABLE_NAME_UPDATES = {
-    'PX_STAT': Column.RECIPIENT_STATUS.name,
-    'TRR_ID_CODE': Column.ORGAN_TRANSPLANT_ID.name,
-    'TRR_FOL_ID_CODE': 'FOLLOWUP_ID',
-    'PX_STAT_DATE': 'FOLLOWUP_DATE',
-    'FUNC_STAT': 'FUNCTIONAL_STATUS',
-    'ACUTE_REJ_EPI': 'NUM_ACUTE_REJECTIONS',
-    'PT_CODE': 'RECIPIENT_ID',
-    'WL_ID_CODE': Column.WAITLIST_ID.name,
-    'FUNC_STAT_TCR': 'FUNCTIONAL_STATUS_AT_REGISTRATION',
-    'FUNC_STAT_TRF': 'FUNCTIONAL_STATUS_AT_FOLLOW_UP',
-    'FUNC_STAT_TRR': 'FUNCTIONAL_STATUS_AT_TRANSPLANT',
-    'INIT_STAT': 'STATUS_AT_REGISTRATION',
-    'DIAG': 'DIAGNOSIS',
-    'PTIME': 'PATIENT_SURVIVAL_TIME',
-    'DAYSWAIT_CHRON': 'DAYS_ON_WAITLIST',
-    'AGE': 'RECIPIENT_AGE',
-    'AGE_DON': 'DONOR_AGE',
-    'TRTREJ1Y': 'REJECTED_WITHIN_YEAR',
-    'TX_DATE': Column.TRANSPLANT_DATE.name,
-    'LI_BIOPSY': 'DONOR_LIVER_QUALITY',
-    'ABO': 'RECIPIENT_BLOOD_TYPE',
-    'ABO_DON': 'DONOR_BLOOD_TYPE',
-    'ABO_MAT': 'DONOR-RECIPIENT_BLOOD_LEVEL',
-    'GRF_STAT': 'GRAFT_FUNCTIONING',
-    'GTIME': 'GRAFT_LIFESPAN',
-    'GENDER': 'RECIPIENT_GENDER',
-    'ADMIT_DATE_DON': 'DONOR_ADMISSION_DATE',
-    'DON_TY': Column.DONOR_TYPE.name,
-    'GENDER_DON': 'DONOR_GENDER',
-    'RECOVERY_DATE_DON': Column.ORGAN_RECOVERY_DATE.name,
-    'INIT_DATE': Column.WAITLIST_REGISTRATION_DATE.name
-}
-VALUE_UPDATES = {
-    Column.RECIPIENT_STATUS.name: {
-        'A': 'Alive',
-        'L': 'Lost',
-        'D': 'Died',
-        'R': 'Retransplanted',
-        'N': 'Not Seen',
-    },
-    Column.VARIABLE_NAME.name: VARIABLE_NAME_UPDATES,
-    Column.DONOR_TYPE.name: {'C': DECEASED_VALUE, 'L': 'Living'},
+VALUES_TO_UPDATE = {
+    Column.RECIPIENT_STATUS.name: RecipientStatus,
+    Column.VARIABLE_NAME.name: Column,
+    Column.DONOR_TYPE.name: DonorType,
+    Column.REASON_REMOVED_WAITLIST.name: WaitlistRemovalReason,
+    Column.FUNCTIONAL_STATUS.name: FunctionalStatus,
+    Column.FUNCTIONAL_STATUS_AT_REGISTRATION.name: FunctionalStatus,
+    Column.FUNCTIONAL_STATUS_AT_FOLLOW_UP.name: FunctionalStatus,
+    Column.FUNCTIONAL_STATUS_AT_TRANSPLANT.name: FunctionalStatus,
 }
 
 """
@@ -70,12 +32,12 @@ LIVER_ORGAN_RELEVANT_NAMES = [
     'TRR_ID_CODE',
     'WL_ID_CODE',
     'PT_CODE',
-    Column.DONOR_ID.name,
+    'DONOR_ID',
     'GENDER',
     'AGE',
     'AGE_DON',
     'INIT_MELD_OR_PELD',
-    Column.INIT_MELD_PELD_LAB_SCORE.name,
+    'INIT_MELD_PELD_LAB_SCORE',
     'FINAL_MELD_OR_PELD',
     'FINAL_MELD_PELD_LAB_SCORE',
     'FUNC_STAT_TCR',
@@ -97,9 +59,11 @@ LIVER_ORGAN_RELEVANT_NAMES = [
     'DON_TY',
     'RECOVERY_DATE_DON',
     'INIT_DATE',
-    'INIT_STAT',
-    Column.END_DATE.name
+    'END_DATE',
+    'REM_CD',
+    'PX_STAT'
 ]
+
 LIVER_FOLLOW_UP_RELEVANT_NAMES = [
     'TRR_ID_CODE',
     'PX_STAT',
@@ -111,35 +75,37 @@ LIVER_FOLLOW_UP_RELEVANT_NAMES = [
 DONOR_RELEVANT_NAMES = [Column.DONOR_ID.name, 'RECOVERY_DATE_DON']
 
 
-@staticmethod
-def renames(original_df: pd.DataFrame) -> pd.DataFrame:
-    original_df.rename(columns=VARIABLE_NAME_UPDATES, inplace=True)
+@ staticmethod
+def rename_columns(original_df: pd.DataFrame) -> pd.DataFrame:
+    original_df.rename(columns={col: Column.from_code(col).name if Column.from_code(
+        col)
+        else col for col in original_df.columns}, inplace=True)
     return original_df
 
 
-@staticmethod
+@ staticmethod
 def rename_variable_name_rows(original_df: pd.DataFrame) -> pd.DataFrame:
     original_df[Column.VARIABLE_NAME.name] = original_df[Column.VARIABLE_NAME.name].map(
-        VARIABLE_NAME_UPDATES)
+        lambda old_value: Column.from_code(old_value).name)
     return original_df
 
 
-@staticmethod
+@ staticmethod
 def rename_row_values(original_df: pd.DataFrame) -> pd.DataFrame:
-    for column, value_map in VALUE_UPDATES.items():
+    for column, enum in VALUES_TO_UPDATE.items():
         if column in original_df.columns:
             original_df[column] = original_df[column].map(
                 # Preserve NaN and unmapped values
-                lambda row: value_map.get(row, row))
+                lambda row: enum.from_code(row).name if enum.from_code(row) else row)
     return original_df
 
 
-@staticmethod
+@ staticmethod
 def read_csv_to_dataframe(csv_file_path: str) -> pd.DataFrame:
     return pd.read_csv(csv_file_path, delimiter='\t', encoding='ISO-8859-1')
 
 
-@staticmethod
+@ staticmethod
 def read_metadata() -> Dict[str, pd.DataFrame]:
     """
     Returns dataframe of information for STAR File Data Dictionary.
@@ -161,18 +127,18 @@ def read_metadata() -> Dict[str, pd.DataFrame]:
     return cleaned_metadata
 
 
-@staticmethod
+@ staticmethod
 def get_metadata_for_sheet(sheet_name: str) -> pd.DataFrame:
     metadata_df = read_metadata()
     metadata_df = metadata_df[sheet_name]
     metadata_df = metadata_df[METADATA_NAMES]
     metadata_df.columns = metadata_df.columns.str.replace(' ', '_')
     metadata_df[Column.VARIABLE_NAME.name] = metadata_df[Column.VARIABLE_NAME.name].map(
-        lambda row: VARIABLE_NAME_UPDATES.get(row, row))
+        lambda old_value: Column.from_code(old_value).name if Column.from_code(old_value) else old_value)
     return metadata_df
 
 
-@staticmethod
+@ staticmethod
 def get_dictionary_for_sheet(sheet_name: str) -> Dict[str, str]:
     """
     Returns a map of variables to their descriptions based on a sheet in the STAR File Data Dictionary.
@@ -181,21 +147,22 @@ def get_dictionary_for_sheet(sheet_name: str) -> Dict[str, str]:
     return metadata_df.set_index(Column.VARIABLE_NAME.name)[Column.DESCRIPTION.name].to_dict()
 
 
-@staticmethod
-def process_dataframe(original_df: pd.DataFrame, columns_to_extract: List[str] = None) -> pd.DataFrame:
+@ staticmethod
+def process_dataframe(original_df: pd.DataFrame, columns_to_extract: List[str] = None, sample_frac: float = 0.25) -> pd.DataFrame:
     original_df = original_df[columns_to_extract] if columns_to_extract else original_df
-    original_df = renames(original_df)
+    original_df = rename_columns(original_df)
     original_df = rename_row_values(original_df)
     original_df.replace('.', np.nan, inplace=True)
+    original_df = original_df.sample(frac=sample_frac).reset_index(drop=True)
     return original_df
 
 
-@staticmethod
+@ staticmethod
 def filter_dataframe(original_df: pd.DataFrame, predicate: Callable[[pd.DataFrame], pd.Series]) -> pd.DataFrame:
     return original_df[predicate(original_df)]
 
 
-@staticmethod
+@ staticmethod
 def get_names_from_html(html_file_path: str) -> List[str]:
     html_content = ''
     with open(html_file_path, 'r', encoding='utf-8') as file:
@@ -211,38 +178,41 @@ def get_names_from_html(html_file_path: str) -> List[str]:
     return first_td_values
 
 
-@staticmethod
+@ staticmethod
 def get_data_dictionary_from_dataframe(sheet_in_metadata: str, data_df: pd.DataFrame) -> Dict[str, str]:
     variable_description_map = get_dictionary_for_sheet(sheet_in_metadata)
     return {column: variable_description_map.get(column, "Description not found") for column in data_df.columns}
 
 
-@staticmethod
+@ staticmethod
 def read_organ_data(sheet_in_metadata: str = 'LIVER_DATA', data_file_path: str = 'Delimited Text File 202409/Liver/LIVER_DATA.DAT') -> Tuple[pd.DataFrame, Dict[str, str]]:
     """
-    Contains information on all waiting list registrations and transplants of that organ type that have been listed or performed. 
+    Contains information on all waiting list registrations and transplants of that organ type that have been listed or performed.
     There is one record per waiting list  registration/transplant event, and each record includes the most recent
     follow-up information.
 
     Waiting list registrations can be selected by choosing records where WAITLIST_ID is not null,
-    and transplants performed can be selected by choosing records where ORGAN_TRANSPLANT_ID is not null. 
+    and transplants performed can be selected by choosing records where ORGAN_TRANSPLANT_ID is not null.
     """
     data_df = read_csv_to_dataframe(data_file_path)
     data_df.columns = get_names_from_html(
         f'{os.path.splitext(data_file_path)[0]}.htm')
-    data_df = process_dataframe(data_df, LIVER_ORGAN_RELEVANT_NAMES)
-    # Filter on deceased donors only
+    data_df = process_dataframe(
+        data_df, LIVER_ORGAN_RELEVANT_NAMES)
+    # Filter on deceased donors only.
     data_df = filter_dataframe(data_df, lambda df: (
-        df[Column.DONOR_TYPE.name].isna()) | (df[Column.DONOR_TYPE.name] == DECEASED_VALUE))
+        df[Column.DONOR_TYPE.name].isna()) | (df[Column.DONOR_TYPE.name] == DonorType.DECEASED.name))
+    data_df[Column.DONOR_ID.name] = data_df[Column.DONOR_ID.name].astype(
+        'Int64')
     data_df[DATES] = data_df[DATES].apply(pd.to_datetime)
     return data_df, get_data_dictionary_from_dataframe(sheet_in_metadata, data_df)
 
 
-@staticmethod
+@ staticmethod
 def read_follow_up_data(sheet_in_metadata: str = 'LIVER_FOLLOWUP_DATA', data_file_path: str = 'Delimited Text File 202409/Liver/Individual Follow-up Records/LIVER_FOLLOWUP_DATA.DAT') -> Tuple[pd.DataFrame, Dict[str, str]]:
     """
     Contains one record per follow-up per transplant
-    event. 
+    event.
     Therefore, in most cases, you will find multiple records per transplant.
     """
     data_df = read_csv_to_dataframe(data_file_path)
@@ -252,72 +222,96 @@ def read_follow_up_data(sheet_in_metadata: str = 'LIVER_FOLLOWUP_DATA', data_fil
     return data_df, get_data_dictionary_from_dataframe(sheet_in_metadata, data_df)
 
 
-@staticmethod
+@ staticmethod
 def read_donor_data(sheet_in_metadata: str = 'DECEASED_DONOR_DATA', data_file_path: str = 'Delimited Text File 202409/Deceased Donor/DECEASED_DONOR_DATA.DAT') -> Tuple[pd.DataFrame, Dict[str, str]]:
     """
-    Contains information on all deceased donors that have donated organs for 
+    Contains information on all deceased donors that have donated organs for
     There is one record per donor.
     """
     data_df = read_csv_to_dataframe(data_file_path)
     data_df.columns = get_names_from_html(
         f'{os.path.splitext(data_file_path)[0]}.htm')
-    data_df = process_dataframe(data_df, DONOR_RELEVANT_NAMES)
+    data_df = process_dataframe(
+        data_df, DONOR_RELEVANT_NAMES, sample_frac=0.25)
     data_df[Column.DONOR_ID.name] = data_df[Column.DONOR_ID.name].astype(
-        'int64')
+        'Int64')
+    for column in DATES:
+        if column in data_df.columns:
+            data_df[column] = data_df[column].apply(pd.to_datetime)
     return data_df, get_data_dictionary_from_dataframe(sheet_in_metadata, data_df)
 
 
-@staticmethod
+@ staticmethod
 def get_available_organs_on_date(date: pd.DatetimeIndex) -> pd.DataFrame:
     """
     Provides the amount of livers available for donation by a given date
     based on deceased donors.
 
-    This should be a feature in our state. 
+    This should be a feature in our state.
     """
     donor_df, _ = read_donor_data()
     organ_df, _ = read_organ_data()
     transplants_with_donors = organ_df.dropna(subset=[Column.DONOR_ID.name])
-    transplants_with_donors[Column.DONOR_ID.name] = transplants_with_donors[Column.DONOR_ID.name].astype(
-        'int64')
-    transplants_with_donors = transplants_with_donors.dropna(
-        subset=[Column.ORGAN_TRANSPLANT_ID.name])
-    transplants_with_donors = transplants_with_donors[[
-        Column.ORGAN_TRANSPLANT_ID.name, Column.TRANSPLANT_DATE.name, Column.DONOR_ID.name]]
+
+    # Identify WAITLIST_IDs that have at least one non-null ORGAN_TRANSPLANT_ID.
+    # They should eventually get a transplant to be in our dataset.
+    valid_waitlist_ids = transplants_with_donors.dropna(
+        subset=[Column.WAITLIST_ID.name])
+    valid_waitlist_ids = transplants_with_donors.dropna(
+        subset=[Column.ORGAN_TRANSPLANT_ID.name])[Column.WAITLIST_ID.name].unique()
+
+    # Filter to keep only rows with these WAITLIST_IDs.
+    transplants_with_donors = transplants_with_donors[transplants_with_donors[Column.WAITLIST_ID.name].isin(
+        valid_waitlist_ids)]
+
+    # Merge donor data with transplant data
     transplants_with_donors = pd.merge(
-        donor_df, transplants_with_donors, on=Column.DONOR_ID.name, how='left')
-    transplants_with_donors = transplants_with_donors.sort_values(
-        Column.TRANSPLANT_DATE.name).groupby(Column.ORGAN_TRANSPLANT_ID.name, as_index=False).first()
+        transplants_with_donors, donor_df, on=[
+            Column.DONOR_ID.name, Column.ORGAN_RECOVERY_DATE.name], how='left'
+    )
 
-    # TODO: Figure out why I need to do this again after the groupby.
-    transplants_with_donors[Column.ORGAN_RECOVERY_DATE.name] = pd.to_datetime(
-        transplants_with_donors[Column.ORGAN_RECOVERY_DATE.name])
-    transplants_with_donors[Column.TRANSPLANT_DATE.name] = pd.to_datetime(
-        transplants_with_donors[Column.TRANSPLANT_DATE.name])
+    # Ensure that on the day I request, the organ has been recovered but has not yet been transplanted.
+    valid_transplant_ids = transplants_with_donors[
+        (transplants_with_donors[Column.TRANSPLANT_DATE.name] >= date) |
+        (transplants_with_donors[Column.TRANSPLANT_DATE.name].isna())
+    ][Column.ORGAN_TRANSPLANT_ID.name].unique()
 
+    # Filter to keep only rows with these ORGAN_TRANSPLANT_IDs.
     transplants_with_donors = transplants_with_donors[
         (transplants_with_donors[Column.ORGAN_RECOVERY_DATE.name] <= date) &
-        ((transplants_with_donors[Column.TRANSPLANT_DATE.name] > date)
-         | transplants_with_donors[Column.TRANSPLANT_DATE.name].isna())
+        (transplants_with_donors[Column.ORGAN_TRANSPLANT_ID.name].isin(
+            valid_transplant_ids) &
+         # Make sure they haven't died yet or been removed.
+         (transplants_with_donors[Column.END_DATE.name] > date))
     ]
     return transplants_with_donors
 
 
-@staticmethod
+@ staticmethod
 def get_waitlist_members_on_date(date: pd.DatetimeIndex) -> pd.DataFrame:
     """
     Provides the amount of livers available for donation by a given date
     based on deceased donors.
 
-    This should be a feature in our state. 
+    This should be a feature in our state.
     """
     organ_df, _ = read_organ_data()
-    waitlist_members_without_transplant = organ_df.groupby(Column.WAITLIST_ID.name).filter(
-        lambda group: group[Column.ORGAN_TRANSPLANT_ID.name].isna().all())
-    waitlist_members_without_transplant = waitlist_members_without_transplant.dropna(
-        subset=[Column.INIT_MELD_PELD_LAB_SCORE.name])
-    waitlist_members_without_transplant = waitlist_members_without_transplant[
-        (waitlist_members_without_transplant[Column.WAITLIST_REGISTRATION_DATE.name] <= date) &
+    # They should also have been registered prior to date but
+    # not yet have died or been removed.
+    organ_df = organ_df[
+        (organ_df[Column.WAITLIST_REGISTRATION_DATE.name] <= date) &
         # Make sure they haven't died yet or been removed.
-        (waitlist_members_without_transplant[Column.END_DATE.name] > date)]
-    return waitlist_members_without_transplant
+        (organ_df[Column.END_DATE.name] > date)]
+    organ_df = organ_df.dropna(
+        subset=[Column.WAITLIST_ID.name])
+
+    # Group by WAITLIST_ID and filter groups that have at least one non-null ORGAN_TRANSPLANT_ID and INIT_MELD_PELD_LAB_SCORE.
+    valid_waitlist_ids = organ_df.groupby(Column.WAITLIST_ID.name).filter(
+        lambda group: group[Column.ORGAN_TRANSPLANT_ID.name].notna().any() and
+        group[Column.INIT_MELD_PELD_LAB_SCORE.name].notna().any()
+    )[Column.WAITLIST_ID.name].unique()
+
+    # Filter to keep only rows with these WAITLIST_IDs.
+    waitlist_members = organ_df[organ_df[Column.WAITLIST_ID.name].isin(
+        valid_waitlist_ids)]
+    return waitlist_members
