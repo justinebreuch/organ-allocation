@@ -75,7 +75,7 @@ LIVER_FOLLOW_UP_RELEVANT_NAMES = [
 DONOR_RELEVANT_NAMES = [Column.DONOR_ID.name, 'RECOVERY_DATE_DON']
 
 
-@ staticmethod
+@staticmethod
 def rename_columns(original_df: pd.DataFrame) -> pd.DataFrame:
     original_df.rename(columns={col: Column.from_code(col).name if Column.from_code(
         col)
@@ -83,14 +83,14 @@ def rename_columns(original_df: pd.DataFrame) -> pd.DataFrame:
     return original_df
 
 
-@ staticmethod
+@staticmethod
 def rename_variable_name_rows(original_df: pd.DataFrame) -> pd.DataFrame:
     original_df[Column.VARIABLE_NAME.name] = original_df[Column.VARIABLE_NAME.name].map(
         lambda old_value: Column.from_code(old_value).name)
     return original_df
 
 
-@ staticmethod
+@staticmethod
 def rename_row_values(original_df: pd.DataFrame) -> pd.DataFrame:
     for column, enum in VALUES_TO_UPDATE.items():
         if column in original_df.columns:
@@ -100,12 +100,12 @@ def rename_row_values(original_df: pd.DataFrame) -> pd.DataFrame:
     return original_df
 
 
-@ staticmethod
+@staticmethod
 def read_csv_to_dataframe(csv_file_path: str) -> pd.DataFrame:
     return pd.read_csv(csv_file_path, delimiter='\t', encoding='ISO-8859-1')
 
 
-@ staticmethod
+@staticmethod
 def read_metadata() -> Dict[str, pd.DataFrame]:
     """
     Returns dataframe of information for STAR File Data Dictionary.
@@ -127,7 +127,7 @@ def read_metadata() -> Dict[str, pd.DataFrame]:
     return cleaned_metadata
 
 
-@ staticmethod
+@staticmethod
 def get_metadata_for_sheet(sheet_name: str) -> pd.DataFrame:
     metadata_df = read_metadata()
     metadata_df = metadata_df[sheet_name]
@@ -138,7 +138,7 @@ def get_metadata_for_sheet(sheet_name: str) -> pd.DataFrame:
     return metadata_df
 
 
-@ staticmethod
+@staticmethod
 def get_dictionary_for_sheet(sheet_name: str) -> Dict[str, str]:
     """
     Returns a map of variables to their descriptions based on a sheet in the STAR File Data Dictionary.
@@ -147,7 +147,7 @@ def get_dictionary_for_sheet(sheet_name: str) -> Dict[str, str]:
     return metadata_df.set_index(Column.VARIABLE_NAME.name)[Column.DESCRIPTION.name].to_dict()
 
 
-@ staticmethod
+@staticmethod
 def process_dataframe(original_df: pd.DataFrame, columns_to_extract: List[str] = None, sample_frac: float = 0.25) -> pd.DataFrame:
     original_df = original_df[columns_to_extract] if columns_to_extract else original_df
     original_df = rename_columns(original_df)
@@ -157,12 +157,12 @@ def process_dataframe(original_df: pd.DataFrame, columns_to_extract: List[str] =
     return original_df
 
 
-@ staticmethod
+@staticmethod
 def filter_dataframe(original_df: pd.DataFrame, predicate: Callable[[pd.DataFrame], pd.Series]) -> pd.DataFrame:
     return original_df[predicate(original_df)]
 
 
-@ staticmethod
+@staticmethod
 def get_names_from_html(html_file_path: str) -> List[str]:
     html_content = ''
     with open(html_file_path, 'r', encoding='utf-8') as file:
@@ -178,13 +178,13 @@ def get_names_from_html(html_file_path: str) -> List[str]:
     return first_td_values
 
 
-@ staticmethod
+@staticmethod
 def get_data_dictionary_from_dataframe(sheet_in_metadata: str, data_df: pd.DataFrame) -> Dict[str, str]:
     variable_description_map = get_dictionary_for_sheet(sheet_in_metadata)
     return {column: variable_description_map.get(column, "Description not found") for column in data_df.columns}
 
 
-@ staticmethod
+@staticmethod
 def read_organ_data(sheet_in_metadata: str = 'LIVER_DATA', data_file_path: str = 'Delimited Text File 202409/Liver/LIVER_DATA.DAT') -> Tuple[pd.DataFrame, Dict[str, str]]:
     """
     Contains information on all waiting list registrations and transplants of that organ type that have been listed or performed.
@@ -208,7 +208,7 @@ def read_organ_data(sheet_in_metadata: str = 'LIVER_DATA', data_file_path: str =
     return data_df, get_data_dictionary_from_dataframe(sheet_in_metadata, data_df)
 
 
-@ staticmethod
+@staticmethod
 def read_follow_up_data(sheet_in_metadata: str = 'LIVER_FOLLOWUP_DATA', data_file_path: str = 'Delimited Text File 202409/Liver/Individual Follow-up Records/LIVER_FOLLOWUP_DATA.DAT') -> Tuple[pd.DataFrame, Dict[str, str]]:
     """
     Contains one record per follow-up per transplant
@@ -222,7 +222,7 @@ def read_follow_up_data(sheet_in_metadata: str = 'LIVER_FOLLOWUP_DATA', data_fil
     return data_df, get_data_dictionary_from_dataframe(sheet_in_metadata, data_df)
 
 
-@ staticmethod
+@staticmethod
 def read_donor_data(sheet_in_metadata: str = 'DECEASED_DONOR_DATA', data_file_path: str = 'Delimited Text File 202409/Deceased Donor/DECEASED_DONOR_DATA.DAT') -> Tuple[pd.DataFrame, Dict[str, str]]:
     """
     Contains information on all deceased donors that have donated organs for
@@ -241,7 +241,7 @@ def read_donor_data(sheet_in_metadata: str = 'DECEASED_DONOR_DATA', data_file_pa
     return data_df, get_data_dictionary_from_dataframe(sheet_in_metadata, data_df)
 
 
-@ staticmethod
+@staticmethod
 def get_available_organs_on_date(date: pd.DatetimeIndex) -> pd.DataFrame:
     """
     Provides the amount of livers available for donation by a given date
@@ -287,7 +287,7 @@ def get_available_organs_on_date(date: pd.DatetimeIndex) -> pd.DataFrame:
     return transplants_with_donors
 
 
-@ staticmethod
+@staticmethod
 def get_waitlist_members_on_date(date: pd.DatetimeIndex) -> pd.DataFrame:
     """
     Provides the amount of livers available for donation by a given date
