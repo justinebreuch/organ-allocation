@@ -73,6 +73,11 @@ LIVER_FOLLOW_UP_RELEVANT_NAMES = [
     'FUNC_STAT',
     'ACUTE_REJ_EPI']
 DONOR_RELEVANT_NAMES = [Column.DONOR_ID.name, 'RECOVERY_DATE_DON']
+RELEVANT_WAITLIST_RESONS = [
+    WaitlistRemovalReason.TRANSPLANT.name,
+    WaitlistRemovalReason.DECEASED_DONOR.name,
+    WaitlistRemovalReason.DIED.name,
+    WaitlistRemovalReason.DIED_DURING_TRANSPLANT.name]
 
 
 @staticmethod
@@ -200,9 +205,23 @@ def read_organ_data(sheet_in_metadata: str = 'LIVER_DATA', data_file_path: str =
     data_df = process_dataframe(
         data_df, LIVER_ORGAN_RELEVANT_NAMES)
     data_df = data_df.dropna(subset=[Column.WAITLIST_ID.name])
-    # Filter on deceased donors only.
-    data_df = filter_dataframe(data_df, lambda df: (
-        df[Column.DONOR_TYPE.name].isna()) | (df[Column.DONOR_TYPE.name] == DonorType.DECEASED.name))
+
+    # Filter on deceased donors and relevant reasons for the end of the transplant.
+    valid_waitlist_ids = data_df.groupby(Column.WAITLIST_ID.name).filter(
+        lambda group:
+        (
+            (group[Column.REASON_REMOVED_WAITLIST.name].isin(
+                RELEVANT_WAITLIST_RESONS))
+        ) &
+        (
+            (group[Column.DONOR_TYPE.name] == DonorType.OTHER.name) |
+            (group[Column.DONOR_TYPE.name] == DonorType.DECEASED.name)
+        )
+    )[Column.WAITLIST_ID.name].unique()
+
+    data_df = data_df[data_df[Column.WAITLIST_ID.name].isin(
+        valid_waitlist_ids)]
+
     data_df[Column.DONOR_ID.name] = data_df[Column.DONOR_ID.name].astype(
         'Int64')
     data_df[DATES] = data_df[DATES].apply(pd.to_datetime)
@@ -254,15 +273,17 @@ def get_available_organs(by_date: pd.DatetimeIndex = None) -> pd.DataFrame:
     transplants_with_donors = organ_df.dropna(subset=[Column.DONOR_ID.name])
 
     # Identify WAITLIST_IDs that have at least one non-null ORGAN_TRANSPLANT_ID.
-    # They should eventually get a transplant to be in our dataset.
+    # They should eventually get a transplant or pass to be in our dataset.
     valid_waitlist_ids = organ_df.groupby(Column.WAITLIST_ID.name).filter(
-        lambda group: group[Column.ORGAN_TRANSPLANT_ID.name].notna().any() &
+        lambda group:
+        (
+            (group[Column.REASON_REMOVED_WAITLIST.name] == WaitlistRemovalReason.DIED).any() |
+            group[Column.ORGAN_TRANSPLANT_ID.name].notna().any()
+        ) &
         (
             (group[Column.ORGAN_RECOVERY_DATE.name] <= by_date).any() &
-            # Make sure they haven't died yet or been removed.
             (group[Column.END_DATE.name] > by_date).any() &
-            ((group[Column.TRANSPLANT_DATE.name] >= by_date).any()
-             | (group[Column.TRANSPLANT_DATE.name].isna()).any())
+            (group[Column.TRANSPLANT_DATE.name] >= by_date).any()
         ) if by_date else True
     )[Column.WAITLIST_ID.name].unique()
 
@@ -278,7 +299,7 @@ def get_available_organs(by_date: pd.DatetimeIndex = None) -> pd.DataFrame:
     return transplants_with_donors
 
 
-@ staticmethod
+@staticmethod
 def get_waitlist_members(by_date: pd.DatetimeIndex = None) -> pd.DataFrame:
     """
     Provides the amount of livers available for donation by a given date
@@ -298,9 +319,13 @@ def get_waitlist_members(by_date: pd.DatetimeIndex = None) -> pd.DataFrame:
             (organ_df[Column.END_DATE.name] > by_date)]
 
     # Group by WAITLIST_ID and filter groups that have at least one
-    # non-null ORGAN_TRANSPLANT_ID and INIT_MELD_PELD_LAB_SCORE.
+    # INIT_MELD_PELD_LAB_SCORE non-null
+    # and either has an ORGAN_TRANSPLANT_ID or have died.
     valid_waitlist_ids = organ_df.groupby(Column.WAITLIST_ID.name).filter(
-        lambda group: group[Column.ORGAN_TRANSPLANT_ID.name].notna().any() and
+        lambda group:
+            ((group[Column.TRANSPLANT_DATE.name] >= by_date).any() &
+             (group[Column.ORGAN_TRANSPLANT_ID.name].notna()).any() |
+             (group[Column.REASON_REMOVED_WAITLIST.name] == WaitlistRemovalReason.DIED).any()) &
         group[Column.INIT_MELD_PELD_LAB_SCORE.name].notna().any()
     )[Column.WAITLIST_ID.name].unique()
 
