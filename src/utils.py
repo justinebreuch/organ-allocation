@@ -210,11 +210,11 @@ def read_organ_data(sheet_in_metadata: str = 'LIVER_DATA', data_file_path: str =
         lambda group:
         (
             (group[Column.REASON_REMOVED_WAITLIST.name].isin(
-                RELEVANT_WAITLIST_RESONS))
+                RELEVANT_WAITLIST_RESONS)).any()
         ) &
         (
-            (group[Column.DONOR_TYPE.name] == DonorType.OTHER.name) |
-            (group[Column.DONOR_TYPE.name] == DonorType.DECEASED.name)
+            (group[Column.DONOR_TYPE.name] == DonorType.OTHER.name).any() |
+            (group[Column.DONOR_TYPE.name] == DonorType.DECEASED.name).any()
         )
     )[Column.RECIPIENT_ID.name].unique()
 
