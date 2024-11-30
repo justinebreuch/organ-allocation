@@ -196,7 +196,7 @@ def read_organ_data(sheet_in_metadata: str = 'LIVER_DATA', data_file_path: str =
     There is one record per waiting list  registration/transplant event, and each record includes the most recent
     follow-up information.
 
-    Waiting list registrations can be selected by choosing records where WAITLIST_ID is not null,
+    Waiting list registrations can be selected by choosing records where RECIPIENT_ID is not null,
     and transplants performed can be selected by choosing records where ORGAN_TRANSPLANT_ID is not null.
     """
     data_df = read_csv_to_dataframe(data_file_path)
@@ -204,10 +204,10 @@ def read_organ_data(sheet_in_metadata: str = 'LIVER_DATA', data_file_path: str =
         f'{os.path.splitext(data_file_path)[0]}.htm')
     data_df = process_dataframe(
         data_df, LIVER_ORGAN_RELEVANT_NAMES)
-    data_df = data_df.dropna(subset=[Column.WAITLIST_ID.name])
+    data_df = data_df.dropna(subset=[Column.RECIPIENT_ID.name])
 
     # Filter on deceased donors and relevant reasons for the end of the transplant.
-    valid_waitlist_ids = data_df.groupby(Column.WAITLIST_ID.name).filter(
+    valid_recipient_ids = data_df.groupby(Column.RECIPIENT_ID.name).filter(
         lambda group:
         (
             (group[Column.REASON_REMOVED_WAITLIST.name].isin(
@@ -217,10 +217,10 @@ def read_organ_data(sheet_in_metadata: str = 'LIVER_DATA', data_file_path: str =
             (group[Column.DONOR_TYPE.name] == DonorType.OTHER.name) |
             (group[Column.DONOR_TYPE.name] == DonorType.DECEASED.name)
         )
-    )[Column.WAITLIST_ID.name].unique()
+    )[Column.RECIPIENT_ID.name].unique()
 
-    data_df = data_df[data_df[Column.WAITLIST_ID.name].isin(
-        valid_waitlist_ids)]
+    data_df = data_df[data_df[Column.RECIPIENT_ID.name].isin(
+        valid_recipient_ids)]
 
     data_df[Column.DONOR_ID.name] = data_df[Column.DONOR_ID.name].astype(
         'Int64')
@@ -272,9 +272,9 @@ def get_available_organs(by_date: pd.DatetimeIndex = None) -> pd.DataFrame:
     organ_df, _ = read_organ_data()
     transplants_with_donors = organ_df.dropna(subset=[Column.DONOR_ID.name])
 
-    # Identify WAITLIST_IDs that have at least one non-null ORGAN_TRANSPLANT_ID.
+    # Identify RECIPIENT_IDs that have at least one non-null ORGAN_TRANSPLANT_ID.
     # They should eventually get a transplant or pass to be in our dataset.
-    valid_waitlist_ids = organ_df.groupby(Column.WAITLIST_ID.name).filter(
+    valid_recipient_ids = organ_df.groupby(Column.RECIPIENT_ID.name).filter(
         lambda group:
         (
             (group[Column.REASON_REMOVED_WAITLIST.name] == WaitlistRemovalReason.DIED).any() |
@@ -285,10 +285,10 @@ def get_available_organs(by_date: pd.DatetimeIndex = None) -> pd.DataFrame:
             (group[Column.END_DATE.name] > by_date).any() &
             (group[Column.TRANSPLANT_DATE.name] >= by_date).any()
         ) if by_date else True
-    )[Column.WAITLIST_ID.name].unique()
+    )[Column.RECIPIENT_ID.name].unique()
 
-    transplants_with_donors = transplants_with_donors[transplants_with_donors[Column.WAITLIST_ID.name].isin(
-        valid_waitlist_ids)]
+    transplants_with_donors = transplants_with_donors[transplants_with_donors[Column.RECIPIENT_ID.name].isin(
+        valid_recipient_ids)]
 
     # Add donor data to transplant data.
     donor_df, _ = read_donor_data()
@@ -308,7 +308,7 @@ def get_waitlist_members(by_date: pd.DatetimeIndex = None) -> pd.DataFrame:
     This should be a feature in our state.
     """
     organ_df, _ = read_organ_data()
-    organ_df = organ_df.dropna(subset=[Column.WAITLIST_ID.name])
+    organ_df = organ_df.dropna(subset=[Column.RECIPIENT_ID.name])
 
     # They should also have been registered prior to date but
     # not yet have died or been removed.
@@ -318,18 +318,18 @@ def get_waitlist_members(by_date: pd.DatetimeIndex = None) -> pd.DataFrame:
             # Make sure they haven't died yet or been removed.
             (organ_df[Column.END_DATE.name] > by_date)]
 
-    # Group by WAITLIST_ID and filter groups that have at least one
+    # Group by RECIPIENT_ID and filter groups that have at least one
     # INIT_MELD_PELD_LAB_SCORE non-null
     # and either has an ORGAN_TRANSPLANT_ID or have died.
-    valid_waitlist_ids = organ_df.groupby(Column.WAITLIST_ID.name).filter(
+    valid_recipient_ids = organ_df.groupby(Column.RECIPIENT_ID.name).filter(
         lambda group:
             ((group[Column.TRANSPLANT_DATE.name] >= by_date).any() &
              (group[Column.ORGAN_TRANSPLANT_ID.name].notna()).any() |
              (group[Column.REASON_REMOVED_WAITLIST.name] == WaitlistRemovalReason.DIED).any()) &
         group[Column.INIT_MELD_PELD_LAB_SCORE.name].notna().any()
-    )[Column.WAITLIST_ID.name].unique()
+    )[Column.RECIPIENT_ID.name].unique()
 
-    # Filter to keep only rows with these WAITLIST_IDs.
-    waitlist_members = organ_df[organ_df[Column.WAITLIST_ID.name].isin(
-        valid_waitlist_ids)]
+    # Filter to keep only rows with these RECIPIENT_IDs.
+    waitlist_members = organ_df[organ_df[Column.RECIPIENT_ID.name].isin(
+        valid_recipient_ids)]
     return waitlist_members
