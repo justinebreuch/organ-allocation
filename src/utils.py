@@ -75,7 +75,6 @@ LIVER_FOLLOW_UP_RELEVANT_NAMES = [
 DONOR_RELEVANT_NAMES = [Column.DONOR_ID.name, 'RECOVERY_DATE_DON']
 RELEVANT_WAITLIST_RESONS = [
     WaitlistRemovalReason.TRANSPLANT.name,
-    WaitlistRemovalReason.DECEASED_DONOR.name,
     WaitlistRemovalReason.DIED.name,
     WaitlistRemovalReason.DIED_DURING_TRANSPLANT.name]
 
