@@ -123,7 +123,6 @@ class DonorType(Enum):
 
 
 class WaitlistRemovalReason(Enum):
-    DECEASED_DONOR = auto()
     TRANSPLANT = auto()
     MEDICALLY_UNSUITABLE = auto()
     REFUSED_TRANSPLANT = auto()
@@ -145,9 +144,9 @@ class WaitlistRemovalReason(Enum):
     @classmethod
     def from_code(cls, code: int):
         code_map = {
-            2: cls.DECEASED_DONOR,
+            2: cls.TRANSPLANT,
             3: cls.TRANSPLANT,
-            4: cls.DECEASED_DONOR,
+            4: cls.TRANSPLANT,
             5: cls.MEDICALLY_UNSUITABLE,
             6: cls.REFUSED_TRANSPLANT,
             7: cls.TRANSFERRED,
