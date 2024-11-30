@@ -100,7 +100,7 @@ def rename_row_values(original_df: pd.DataFrame) -> pd.DataFrame:
         if column in original_df.columns:
             original_df[column] = original_df[column].map(
                 # Preserve NaN and unmapped values
-                lambda row: enum.from_code(row).name if enum.from_code(row) else row)
+                lambda row: enum.from_code(pd.to_numeric(row, errors='ignore')).name if enum.from_code(pd.to_numeric(row, errors='ignore')) else row)
     return original_df
 
 
@@ -210,11 +210,16 @@ def read_organ_data(sheet_in_metadata: str = 'LIVER_DATA', data_file_path: str =
         lambda group:
         (
             (group[Column.REASON_REMOVED_WAITLIST.name].isin(
-                RELEVANT_WAITLIST_RESONS)).any()
-        ) &
-        (
-            (group[Column.DONOR_TYPE.name] == DonorType.OTHER.name).any() |
-            (group[Column.DONOR_TYPE.name] == DonorType.DECEASED.name).any()
+                RELEVANT_WAITLIST_RESONS)).all()
+        )
+        & (
+            group[Column.DONOR_TYPE.name].isin(
+                [DonorType.OTHER.name, DonorType.DECEASED.name]).all()
+            # Remove 'OTHER' and 'RETRANSPLANTED'
+        )
+        & (
+            group[Column.RECIPIENT_STATUS.name].isin(
+                [RecipientStatus.DIED.name, RecipientStatus.ALIVE.name]).all()
         )
     )[Column.RECIPIENT_ID.name].unique()
 
