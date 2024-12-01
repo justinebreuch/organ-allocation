@@ -192,7 +192,7 @@ def get_data_dictionary_from_dataframe(sheet_in_metadata: str, data_df: pd.DataF
 def read_organ_data(sheet_in_metadata: str = 'LIVER_DATA', data_file_path: str = 'Delimited Text File 202409/Liver/LIVER_DATA.DAT') -> Tuple[pd.DataFrame, Dict[str, str]]:
     """
     Contains information on all waiting list registrations and transplants of that organ type that have been listed or performed.
-    There is one record per waiting list  registration/transplant event, and each record includes the most recent
+    There is one record per waiting list registration/transplant event, and each record includes the most recent
     follow-up information.
 
     Waiting list registrations can be selected by choosing records where RECIPIENT_ID is not null,
@@ -215,8 +215,8 @@ def read_organ_data(sheet_in_metadata: str = 'LIVER_DATA', data_file_path: str =
         & (
             group[Column.DONOR_TYPE.name].isin(
                 [DonorType.OTHER.name, DonorType.DECEASED.name]).all()
-            # Remove 'OTHER' and 'RETRANSPLANTED'
         )
+        # Remove 'OTHER' and 'RETRANSPLANTED'
         & (
             group[Column.RECIPIENT_STATUS.name].isin(
                 [RecipientStatus.DIED.name, RecipientStatus.ALIVE.name]).all()

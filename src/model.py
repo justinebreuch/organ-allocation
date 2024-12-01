@@ -105,7 +105,7 @@ class RecipientStatus(Enum):
             'R': cls.RETRANSPLANTED,
             'N': cls.NOT_SEEN,
         }
-        return code_map.get(code, cls.OTHER)
+        return code_map.get(code, None)
 
 
 class DonorType(Enum):
@@ -174,7 +174,7 @@ class WaitlistRemovalReason(Enum):
             44: cls.WAITING_FOR_OTHER_ORGAN,
             45: cls.WAITING_FOR_OTHER_ORGAN,
         }
-        return code_map.get(code, cls.OTHER)
+        return code_map.get(code, None)
 
 
 class FunctionalStatus(Enum):
