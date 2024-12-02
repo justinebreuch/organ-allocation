@@ -152,7 +152,7 @@ def get_dictionary_for_sheet(sheet_name: str) -> Dict[str, str]:
 
 
 @staticmethod
-def process_dataframe(original_df: pd.DataFrame, columns_to_extract: List[str] = None, sample_frac: float = 0.25) -> pd.DataFrame:
+def process_dataframe(original_df: pd.DataFrame, columns_to_extract: List[str] = None, sample_frac: float = 0.1) -> pd.DataFrame:
     original_df = original_df[columns_to_extract] if columns_to_extract else original_df
     original_df = rename_columns(original_df)
     original_df = rename_row_values(original_df)
@@ -218,6 +218,7 @@ def read_organ_data(sheet_in_metadata: str = 'LIVER_DATA', data_file_path: str =
         )
         # Remove 'OTHER' and 'RETRANSPLANTED'
         & (
+            group[Column.RECIPIENT_STATUS.name].isna().all() |
             group[Column.RECIPIENT_STATUS.name].isin(
                 [RecipientStatus.DIED.name, RecipientStatus.ALIVE.name]).all()
         )
