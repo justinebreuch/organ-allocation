@@ -20,7 +20,7 @@ class Column(Enum):
     DONOR_GENDER = auto()
     DONOR_ID = auto()
     DONOR_LIVER_QUALITY = auto()
-    DONOR_RECIPIENT_BLOOD_LEVEL = auto()
+    DONOR_RECIPIENT_BLOOD_TYPE_MATCH = auto()
     DONOR_TYPE = auto()
     END_DATE = auto()
     FOLLOWUP_DATE = auto()
@@ -31,7 +31,9 @@ class Column(Enum):
     FUNCTIONAL_STATUS_AT_TRANSPLANT = auto()
     GRAFT_FUNCTIONING = auto()
     GRAFT_LIFESPAN = auto()
+    INIT_MELD_OR_PELD = auto()
     INIT_MELD_PELD_LAB_SCORE = auto()
+    FINAL_MELD_PELD_LAB_SCORE = auto()
     NUM_ACUTE_REJECTIONS = auto()
     ORGAN_RECOVERY_DATE = auto()
     ORGAN_TRANSPLANT_ID = auto()
@@ -48,6 +50,8 @@ class Column(Enum):
     VARIABLE_NAME = auto()
     WAITLIST_ID = auto()
     WAITLIST_REGISTRATION_DATE = auto()
+    RECIPIENT_BLOOD_TYPE_AS_CODE = auto()
+    DONOR_BLOOD_TYPE_AS_CODE = auto()
 
     @classmethod
     def from_code(cls, code: str):
@@ -74,7 +78,7 @@ class Column(Enum):
             'LI_BIOPSY': cls.DONOR_LIVER_QUALITY,
             'ABO': cls.RECIPIENT_BLOOD_TYPE,
             'ABO_DON': cls.DONOR_BLOOD_TYPE,
-            'ABO_MAT': cls.DONOR_RECIPIENT_BLOOD_LEVEL,
+            'ABO_MAT': cls.DONOR_RECIPIENT_BLOOD_TYPE_MATCH,
             'GRF_STAT': cls.GRAFT_FUNCTIONING,
             'GTIME': cls.GRAFT_LIFESPAN,
             'GENDER': cls.RECIPIENT_GENDER,
@@ -83,7 +87,9 @@ class Column(Enum):
             'GENDER_DON': cls.DONOR_GENDER,
             'RECOVERY_DATE_DON': cls.ORGAN_RECOVERY_DATE,
             'INIT_DATE': cls.WAITLIST_REGISTRATION_DATE,
-            'REM_CD': cls.REASON_REMOVED_WAITLIST
+            'REM_CD': cls.REASON_REMOVED_WAITLIST,
+            'INIT_MELD_OR_PELD': cls.INIT_MELD_OR_PELD,
+            'FINAL_MELD_PELD_LAB_SCORE': cls.FINAL_MELD_PELD_LAB_SCORE,
         }
         return code_map.get(code, None)
 
@@ -120,6 +126,19 @@ class DonorType(Enum):
             'L': cls.LIVING,
         }
         return code_map.get(code, cls.OTHER)
+
+
+class Urgency(Enum):
+    MELD = auto()
+    PELD = auto()
+
+    @classmethod
+    def from_code(cls, code: str):
+        code_map = {
+            'MELD': cls.MELD,
+            'PELD': cls.PELD,
+        }
+        return code_map.get(code, None)
 
 
 class WaitlistRemovalReason(Enum):
