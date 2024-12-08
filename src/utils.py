@@ -1,5 +1,5 @@
 import os
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Set, Tuple
 import pandas as pd
 from bs4 import BeautifulSoup
 from .model import Column, DonorType, FunctionalStatus, RecipientStatus, Urgency, WaitlistRemovalReason
@@ -320,20 +320,24 @@ def get_available_organs(by_date: pd.Timestamp = None) -> pd.DataFrame:
     transplant_data, _ = read_organ_data()
     transplants_with_donors = transplant_data.dropna(
         subset=[Column.DONOR_ID.name])
-    # Identify RECIPIENT_IDs that have at least one non-null ORGAN_TRANSPLANT_ID.
-    # They should eventually get a transplant or pass away to be in our dataset.
-    valid_recipient_ids = transplants_with_donors.groupby(Column.RECIPIENT_ID.name).filter(
-        lambda group: (
-            group[Column.ORGAN_TRANSPLANT_ID.name].notna().any()
-        ) &
-        (
-            (group[Column.ORGAN_RECOVERY_DATE.name] <= by_date).any() &
-            (group[Column.END_DATE.name] >= by_date).any() &
-            (group[Column.TRANSPLANT_DATE.name] >= by_date).any()
-        ) if by_date else True
-    )[Column.RECIPIENT_ID.name].unique()
+
+    # Use boolean indexing instead of groupby and filter for performance
+    if by_date:
+        valid_transplants = (
+            transplants_with_donors[Column.ORGAN_TRANSPLANT_ID.name].notna() &
+            (transplants_with_donors[Column.ORGAN_RECOVERY_DATE.name] <= by_date) &
+            (transplants_with_donors[Column.END_DATE.name] >= by_date) &
+            (transplants_with_donors[Column.TRANSPLANT_DATE.name] >= by_date)
+        )
+    else:
+        valid_transplants = transplants_with_donors[Column.ORGAN_TRANSPLANT_ID.name].notna(
+        )
+
+    valid_recipient_ids = transplants_with_donors.loc[valid_transplants, Column.RECIPIENT_ID.name].unique(
+    )
     transplants_with_donors = transplants_with_donors[transplants_with_donors[Column.RECIPIENT_ID.name].isin(
         valid_recipient_ids)]
+
     donor_df, _ = read_donor_data()
     transplants_with_donors = pd.merge(
         transplants_with_donors, donor_df, on=[
@@ -354,24 +358,17 @@ def get_waitlist_members(by_date: pd.Timestamp = None) -> pd.DataFrame:
     organ_df, _ = read_organ_data()
     organ_df = organ_df.dropna(subset=[Column.RECIPIENT_ID.name])
 
-    # They should also have been registered prior to date but
-    # not yet have died or been removed.
     if by_date:
         organ_df = organ_df[
             (organ_df[Column.WAITLIST_REGISTRATION_DATE.name] <= by_date) &
-            # Make sure they haven't died yet or been removed.
-            (organ_df[Column.END_DATE.name] >= by_date)]
+            (organ_df[Column.END_DATE.name] >= by_date) &
+            (organ_df[Column.TRANSPLANT_DATE.name] >= by_date)
+        ]
 
-    # Group by RECIPIENT_ID and filter groups that have at least one
-    # INIT_MELD_PELD_LAB_SCORE non-null
-    # and either has an ORGAN_TRANSPLANT_ID or have died.
-    valid_recipient_ids = organ_df.groupby(Column.RECIPIENT_ID.name).filter(
-        lambda group:
-            (group[Column.TRANSPLANT_DATE.name] >= by_date).any()
-        #  (group[Column.ORGAN_TRANSPLANT_ID.name].notna()).any() |
-    )[Column.RECIPIENT_ID.name].unique()
+    valid_recipient_ids = organ_df.loc[
+        organ_df[Column.TRANSPLANT_DATE.name] >= by_date, Column.RECIPIENT_ID.name
+    ].unique()
 
-    # Filter to keep only rows with these RECIPIENT_IDs.
     waitlist_members = organ_df[organ_df[Column.RECIPIENT_ID.name].isin(
         valid_recipient_ids)]
     waitlist_members.loc[:, Column.DONOR_ID.name] = waitlist_members[Column.DONOR_ID.name].astype(
@@ -448,7 +445,7 @@ def get_mininal_columns_waitlist(by_date: pd.Timestamp) -> pd.DataFrame:
     return waitlist_members[WAITLIST_PREVIEW_FEATURES].sort_values(by=[Column.INIT_MELD_PELD_LAB_SCORE.name], ascending=False)
 
 
-def get_next_day(current_date: pd.Timestamp, allocated_ids: List[Any], max_waitlist: int = 10) -> Tuple[pd.Timestamp, List[pd.DataFrame]]:
+def get_next_day(current_date: pd.Timestamp, allocated_ids: Set[int], max_waitlist: int = 10) -> Tuple[pd.Timestamp, List[pd.DataFrame]]:
     date = current_date
     daily_organs, daily_waitlist_members = pd.DataFrame(), pd.DataFrame()
     while daily_organs.empty and daily_waitlist_members.empty:
@@ -457,7 +454,7 @@ def get_next_day(current_date: pd.Timestamp, allocated_ids: List[Any], max_waitl
             allocated_ids)]
 
         waitlist_members = get_mininal_columns_waitlist(
-            by_date=date).head(max_waitlist)
+            by_date=date)
         waitlist_members = waitlist_members[~waitlist_members[Column.DONOR_ID.name].isin(
             allocated_ids)]
         waitlist_members = waitlist_members[waitlist_members[Column.RECIPIENT_BLOOD_TYPE.name].apply(
@@ -467,9 +464,10 @@ def get_next_day(current_date: pd.Timestamp, allocated_ids: List[Any], max_waitl
                 for donor_blood_type in available_organs[Column.DONOR_BLOOD_TYPE.name]
             )
         )]
-        if (len(available_organs) > 0 and len(available_organs) > 0):
+        if (len(available_organs) > 0 and len(waitlist_members) >= max_waitlist):
             daily_organs = available_organs
-            daily_waitlist_members = waitlist_members
+            daily_waitlist_members = waitlist_members.head(max_waitlist)
         else:
+            print(f'WARNING: Could not find compatibles for {date}')
             date += pd.Timedelta(days=1)
-    return date, [available_organs, waitlist_members]
+    return date, [daily_organs, daily_waitlist_members]
