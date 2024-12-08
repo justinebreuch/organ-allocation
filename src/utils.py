@@ -182,7 +182,7 @@ def get_data_dictionary_from_dataframe(sheet_in_metadata: str, data_df: pd.DataF
     return {column: variable_description_map.get(column, "Description not found") for column in data_df.columns}
 
 
-def read_organ_data(_: str = 'LIVER_DATA', data_file_path: str = 'Delimited Text File 202409/all_transplants.csv', sample_frac=0.1) -> Tuple[pd.DataFrame, Dict[str, str]]:
+def read_organ_data(_: str = 'LIVER_DATA', data_file_path: str = 'Delimited Text File 202409/all_transplants.csv', sample_frac=1.0) -> Tuple[pd.DataFrame, Dict[str, str]]:
     data_df = pd.read_csv(data_file_path)
     data_df = data_df.sample(
         frac=sample_frac, random_state=42).reset_index(drop=True)
@@ -386,14 +386,37 @@ def get_compatible_blood_types(blood_type: str) -> Dict[str, str]:
     Returns:
         Dict: compatible blood types as strings to their match value.
     """
-    all_transplants, _ = read_organ_data()
-    compatibility_df = all_transplants[[Column.DONOR_BLOOD_TYPE.name, Column.RECIPIENT_BLOOD_TYPE.name,
-                                        Column.DONOR_RECIPIENT_BLOOD_TYPE_MATCH.name]].drop_duplicates().fillna({Column.DONOR_RECIPIENT_BLOOD_TYPE_MATCH.name: -1})
-    matches = compatibility_df[compatibility_df[Column.DONOR_BLOOD_TYPE.name] == blood_type][[
-        Column.RECIPIENT_BLOOD_TYPE.name, Column.DONOR_RECIPIENT_BLOOD_TYPE_MATCH.name]]
-    compatibility_map = matches[matches[Column.DONOR_RECIPIENT_BLOOD_TYPE_MATCH.name] >= 1].set_index(
-        Column.RECIPIENT_BLOOD_TYPE.name)[Column.DONOR_RECIPIENT_BLOOD_TYPE_MATCH.name].to_dict()
-    return compatibility_map
+    # all_transplants, _ = read_organ_data(sample_frac=1.0)
+    # compatibility_df = all_transplants[[Column.DONOR_BLOOD_TYPE.name, Column.RECIPIENT_BLOOD_TYPE.name,
+    #                                     Column.DONOR_RECIPIENT_BLOOD_TYPE_MATCH.name]].drop_duplicates().fillna({Column.DONOR_RECIPIENT_BLOOD_TYPE_MATCH.name: -1})
+    # matches = compatibility_df[compatibility_df[Column.DONOR_BLOOD_TYPE.name] == blood_type][[
+    #     Column.RECIPIENT_BLOOD_TYPE.name, Column.DONOR_RECIPIENT_BLOOD_TYPE_MATCH.name]]
+    # compatibility_map = matches[matches[Column.DONOR_RECIPIENT_BLOOD_TYPE_MATCH.name] >= 1].set_index(
+    #     Column.RECIPIENT_BLOOD_TYPE.name)[Column.DONOR_RECIPIENT_BLOOD_TYPE_MATCH.name].to_dict()
+    # return compatibility_map
+    matches = {'A': {'A': 1.0,
+                     'AB': 2.0,
+                     'A1': 1.0,
+                     'B': 3.0,
+                     'O': 3.0,
+                     'A2B': 2.0,
+                     'A1B': 2.0,
+                     'A2': 1.0},
+               'A1': {'A': 1.0,
+                      'AB': 2.0,
+                      'A1': 1.0,
+                      'A2': 1.0,
+                      'O': 3.0,
+                      'A1B': 2.0,
+                      'A2B': 2.0,
+                      'B': 3.0},
+               'A1B': {'AB': 1.0, 'O': 3.0, 'B': 3.0, 'A2B': 1.0, 'A': 3.0, 'A1B': 1.0},
+               'A2': {'A': 1.0, 'AB': 2.0, 'O': 3.0, 'A1': 1.0, 'A2': 1.0, 'B': 3.0},
+               'A2B': {'AB': 1.0, 'A': 3.0, 'O': 3.0, 'B': 3.0, 'A2B': 1.0},
+               'AB': {'AB': 1.0, 'A1B': 1.0, 'B': 3.0, 'O': 3.0, 'A': 3.0},
+               'B': {'B': 1.0, 'AB': 2.0, 'O': 3.0, 'A2B': 2.0, 'A1B': 2.0, 'A': 3.0},
+               'O': {'O': 1.0, 'A': 2.0, 'B': 2.0, 'AB': 2.0, 'A1': 2.0}}
+    return matches.get(blood_type)
 
 
 def get_match_value(donor_blood_type: str, recipient_blood_type) -> int:
@@ -449,18 +472,19 @@ def get_next_day(current_date: pd.Timestamp, allocated_ids: Set[int], max_waitli
     date = current_date
     daily_organs, daily_waitlist_members = pd.DataFrame(), pd.DataFrame()
     while daily_organs.empty and daily_waitlist_members.empty:
-        available_organs = get_mininal_columns_available_organs(by_date=date)
-        available_organs = available_organs[~available_organs[Column.DONOR_ID.name].isin(
-            allocated_ids)]
+        # available_organs = get_mininal_columns_available_organs(by_date=date)
+        # available_organs = available_organs[~available_organs[Column.DONOR_ID.name].isin(
+        #     allocated_ids)]
 
-        waitlist_members = get_mininal_columns_waitlist(
-            by_date=date)
+        # waitlist_members = get_mininal_columns_waitlist(
+        #     by_date=date)
+        available_organs, waitlist_members = read_from_file(date)
         waitlist_members = waitlist_members[~waitlist_members[Column.DONOR_ID.name].isin(
             allocated_ids)]
         waitlist_members = waitlist_members[waitlist_members[Column.RECIPIENT_BLOOD_TYPE.name].apply(
             lambda recipient_blood_type: any(
                 get_match_value(donor_blood_type=donor_blood_type,
-                                recipient_blood_type=recipient_blood_type) > 1.0
+                                recipient_blood_type=recipient_blood_type) >= 1.0
                 for donor_blood_type in available_organs[Column.DONOR_BLOOD_TYPE.name]
             )
         )]
@@ -468,6 +492,20 @@ def get_next_day(current_date: pd.Timestamp, allocated_ids: Set[int], max_waitli
             daily_organs = available_organs
             daily_waitlist_members = waitlist_members.head(max_waitlist)
         else:
-            print(f'WARNING: Could not find compatibles for {date}')
+            print(f'''WARNING: Could not find compatibles for {
+                  date} because only found {len(waitlist_members)}''')
             date += pd.Timedelta(days=1)
     return date, [daily_organs, daily_waitlist_members]
+
+
+def read_from_file(date: pd.Timestamp):
+    organs_filename = f"data/{date.strftime('%Y-%m-%d')}_organs.csv"
+    waitlist_filename = f"data/{date.strftime('%Y-%m-%d')}_waitlist.csv"
+
+    try:
+        organs_df = pd.read_csv(organs_filename)
+        waitlist_df = pd.read_csv(waitlist_filename)
+        return [organs_df, waitlist_df]
+    except FileNotFoundError:
+        print(f"Data files for {date.strftime('%Y-%m-%d')} not found.")
+    return pd.DataFrame.empty(), pd.DataFrame.empty()
