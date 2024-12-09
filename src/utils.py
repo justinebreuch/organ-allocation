@@ -8,7 +8,81 @@ import numpy as np
 
 DATES = [Column.ORGAN_RECOVERY_DATE.name, Column.WAITLIST_REGISTRATION_DATE.name,
          Column.TRANSPLANT_DATE.name, Column.END_DATE.name]
-
+DIAGNOSTIC_CODES = [-1,
+                    999,
+                    4100,
+                    4101,
+                    4102,
+                    4104,
+                    4105,
+                    4106,
+                    4107,
+                    4108,
+                    4110,
+                    4200,
+                    4201,
+                    4202,
+                    4204,
+                    4205,
+                    4206,
+                    4207,
+                    4208,
+                    4209,
+                    4210,
+                    4212,
+                    4213,
+                    4214,
+                    4215,
+                    4216,
+                    4217,
+                    4218,
+                    4219,
+                    4220,
+                    4230,
+                    4231,
+                    4235,
+                    4240,
+                    4241,
+                    4242,
+                    4245,
+                    4250,
+                    4255,
+                    4260,
+                    4264,
+                    4265,
+                    4270,
+                    4271,
+                    4272,
+                    4275,
+                    4280,
+                    4285,
+                    4290,
+                    4300,
+                    4301,
+                    4302,
+                    4303,
+                    4304,
+                    4305,
+                    4306,
+                    4307,
+                    4308,
+                    4315,
+                    4400,
+                    4401,
+                    4402,
+                    4403,
+                    4404,
+                    4405,
+                    4410,
+                    4420,
+                    4430,
+                    4450,
+                    4451,
+                    4455,
+                    4500,
+                    4510,
+                    4520,
+                    4598]
 """"
 DATE CLEANING
 """
@@ -206,6 +280,10 @@ def read_organ_data(_: str = 'LIVER_DATA', data_file_path: str = 'Delimited Text
         data_df, to_column=Column.DONOR_BLOOD_TYPE_AS_CODE, from_column=Column.DONOR_BLOOD_TYPE)
     data_df[Column.DIAGNOSIS.name] = data_df[Column.DIAGNOSIS.name].fillna(
         -1).astype('Int64')
+    data_df = add_diagnosis_code(
+        data_df, to_column=Column.DIAGNOSIS_CODE, from_column=Column.DIAGNOSIS)
+    data_df = add_functional_code(
+        data_df, to_column=Column.FUNCTIONAL_CODE, from_column=Column.FUNCTIONAL_STATUS_AT_REGISTRATION)
     return data_df, None
 
 
@@ -307,6 +385,22 @@ def add_blood_type_code(df: pd.DataFrame, from_column: Column, to_column: Column
     blood_type_to_index = {bt: idx for idx, bt in enumerate(blood_types)}
     df[to_column.name] = df[from_column.name].map(
         blood_type_to_index).fillna(-1).astype(int)
+    return df
+
+
+def add_diagnosis_code(df: pd.DataFrame, from_column: Column, to_column: Column):
+    codes = get_all_diagnostic_codes()
+    diagnosis_to_index = {d: idx for idx, d in enumerate(codes)}
+    df[to_column.name] = df[from_column.name].map(
+        diagnosis_to_index).fillna(-1).astype(int)
+    return df
+
+
+def add_functional_code(df: pd.DataFrame, from_column: Column, to_column: Column):
+    codes = get_all_functional_status()
+    diagnosis_to_index = {d: idx for idx, d in enumerate(codes)}
+    df[to_column.name] = df[from_column.name].map(
+        diagnosis_to_index).replace({'UNKNOWN': -1, 'NOT_APPLICABLE': -1}).fillna(-1).astype(int)
     return df
 
 
@@ -424,6 +518,49 @@ def get_match_value(donor_blood_type: str, recipient_blood_type) -> int:
     return matches.get(recipient_blood_type, -100)
 
 
+def get_all_functional_status() -> List[str]:
+    # all_transplants, _ = read_organ_data()
+    # codes = all_transplants[Column.FUNCTIONAL_STATUS_AT_REGISTRATION.name].unique(
+    # )
+    # codes = [d for d in codes.tolist() if pd.notna(d)]
+    # codes.sort()
+    # return codes
+    return ['NORMAL',
+            'NORMAL_WITH_EFFORT',
+            'NORMAL_WITH_SYMPTOMS',
+            'SELF_CARE',
+            'NO_ASSISTANCE',
+            'OCCASIONAL_ASSISTANCE',
+            'SOME_ASSISTANCE',
+            'CONSIDERABLE_ASSISTANCE',
+            'TOTAL_ASSISTANCE',
+            'CHILD_FULLY_ACTIVE',
+            'CHILD_MINIMAL_PLAY',
+            'CHILD_RESTRICTED_PLAY',
+            'CHILD_TIRES_QUICKLY',
+            'CHILD_MINOR_RESTRICTIONS',
+            'CHILD_INACTIVE',
+            'CHILD_MOSTLY_SLEEPING',
+            'CHILD_MOSTLY_IN_BED',
+            'CHILD_IN_BED',
+            'CHILD_BEDRIDDEN',
+            'DISABLED',
+            'SEVERELY_DISABLED',
+            'VERY_SICK',
+            'MORIBUND',
+            'NOT_APPLICABLE',
+            'UNKNOWN']
+
+
+def get_all_diagnostic_codes() -> List[str]:
+    # all_transplants, _ = read_organ_data()
+    # diagnostic_codes = all_transplants[Column.DIAGNOSIS.name].unique()
+    # diagnostic_codes = [d for d in diagnostic_codes.tolist() if pd.notna(d)]
+    # diagnostic_codes.sort()
+    # return diagnostic_codes
+    return DIAGNOSTIC_CODES
+
+
 def get_all_blood_types() -> List[str]:
     # all_transplants, _ = read_organ_data()
     # blood_types = pd.concat([
@@ -462,7 +599,10 @@ def get_mininal_columns_waitlist(by_date: pd.Timestamp) -> pd.DataFrame:
         Column.RECIPIENT_AGE.name,
         Column.TRANSPLANT_DATE.name,
         Column.END_DATE.name,
-        Column.DIAGNOSIS.name
+        Column.DIAGNOSIS.name,
+        Column.DIAGNOSIS_CODE.name,
+        Column.FUNCTIONAL_STATUS_AT_REGISTRATION.name,
+        Column.FUNCTIONAL_CODE.name
     ]
     waitlist_members = get_waitlist_members(by_date=by_date)
     return waitlist_members[WAITLIST_PREVIEW_FEATURES].sort_values(by=[Column.INIT_MELD_PELD_LAB_SCORE.name], ascending=False)
